@@ -40,3 +40,24 @@ def get_workers(
         models.WorkerAccount.user_id == current_user.id
     ).all()
     return workers
+
+@router.delete("/{worker_id}")
+def delete_worker(
+    worker_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(dependencies.get_current_user),
+):
+    worker = db.query(models.WorkerAccount).filter(
+        models.WorkerAccount.id == worker_id,
+        models.WorkerAccount.user_id == current_user.id
+    ).first()
+    
+    if not worker:
+        raise HTTPException(
+            status_code=404, detail="TikTok account not found or access denied."
+        )
+        
+    db.delete(worker)
+    db.commit()
+    return {"message": "TikTok account successfully deleted"}
+
