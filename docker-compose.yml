@@ -11,24 +11,5 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
-
-  celery_worker:
-    build: . # Assuming a Dockerfile would be here if fully containerized, or use Python image
-    image: python:3.11-slim
-    command: celery -A app.core.celery_app worker --beat --loglevel=info
-    volumes:
-      - .:/app
-    working_dir: /app
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/follow_exchanger
-      - CELERY_BROKER_URL=redis://redis:6379/0
-    depends_on:
-      - redis
-      - db
-
 volumes:
   postgres_data:

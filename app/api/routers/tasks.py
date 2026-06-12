@@ -78,29 +78,97 @@ def verify_task(
         models.TaskLog.task_id == verify_in.task_id,
         models.TaskLog.worker_id == verify_in.worker_id
     ).first()
-    if existing_log and existing_log.status in ["Success"]:
-        raise HTTPException(status_code=400, detail="Task already completed for this account")
+    
+    if existing_log:
+        if existing_log.status == "Success":
+            raise HTTPException(status_code=400, detail="Task already completed for this account")
+        elif existing_log.status == "Pending":
+            raise HTTPException(status_code=400, detail="Verification request is already pending review")
         
-    # Create TaskLog as Success immediately
+        # If it was "Failed" (or anything else), update it to "Pending"
+        existing_log.status = "Pending"
+        db.commit()
+        db.refresh(existing_log)
+        return {"task_log_id": existing_log.id, "status": "Pending"}
+        
+    # Create TaskLog as Pending
     task_log = models.TaskLog(
         task_id=task.id,
         worker_id=worker.id,
-        status="Success"
+        status="Pending"
     )
     db.add(task_log)
+    db.commit()
+    db.refresh(task_log)
     
-    # Reward worker's user
-    current_user.total_credits += task.reward_credits
+    return {"task_log_id": task_log.id, "status": "Pending"}
+
+@router.post("/admin/approve/{task_log_id}")
+def approve_task_log(
+    task_log_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(dependencies.get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can approve tasks")
+        
+    task_log = db.query(models.TaskLog).filter(models.TaskLog.id == task_log_id).first()
+    if not task_log:
+        raise HTTPException(status_code=404, detail="Task Log not found")
+        
+    if task_log.status != "Pending":
+        raise HTTPException(status_code=400, detail=f"Cannot approve task log with status: {task_log.status}")
+        
+    # Get task to reward credits and update follow counts
+    task = db.query(models.Task).filter(models.Task.id == task_log.task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Associated task not found")
+        
+    # Get the worker's user account to reward them
+    worker_account = db.query(models.WorkerAccount).filter(
+        models.WorkerAccount.id == task_log.worker_id
+    ).first()
+    if not worker_account:
+        raise HTTPException(status_code=404, detail="Worker account not found")
+        
+    worker_user = db.query(models.User).filter(models.User.id == worker_account.user_id).first()
+    if not worker_user:
+        raise HTTPException(status_code=404, detail="Worker's user account not found")
+        
+    # Reward credits
+    worker_user.total_credits += task.reward_credits
     
-    # Update target follows
+    # Increment task progress
     task.current_follows += 1
     if task.current_follows >= task.target_follows:
         task.status = "Completed"
         
-    db.commit()
-    db.refresh(task_log)
+    # Update log status
+    task_log.status = "Success"
     
+    db.commit()
     return {"task_log_id": task_log.id, "status": "Success"}
+
+@router.post("/admin/reject/{task_log_id}")
+def reject_task_log(
+    task_log_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(dependencies.get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can reject tasks")
+        
+    task_log = db.query(models.TaskLog).filter(models.TaskLog.id == task_log_id).first()
+    if not task_log:
+        raise HTTPException(status_code=404, detail="Task Log not found")
+        
+    if task_log.status != "Pending":
+        raise HTTPException(status_code=400, detail=f"Cannot reject task log with status: {task_log.status}")
+        
+    # Update status to Failed
+    task_log.status = "Failed"
+    db.commit()
+    return {"task_log_id": task_log.id, "status": "Failed"}
 
 @router.get("/status/{task_log_id}")
 def get_task_status(
