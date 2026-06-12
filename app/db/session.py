@@ -1,8 +1,12 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 
 db_url = settings.DATABASE_URL
+print(f"[DEBUG] settings.DATABASE_URL: {settings.DATABASE_URL}")
+print(f"[DEBUG] os.environ.get('DATABASE_URL'): {os.environ.get('DATABASE_URL')}")
+
 # Supabase direct connection is IPv6 only, which fails on IPv4-only networks.
 # We redirect to the Supabase Connection Pooler (which supports IPv4) and use the pg8000 driver.
 if "db.uoplbhmayrlgarktdkve.supabase.co" in db_url:
@@ -11,6 +15,8 @@ if "db.uoplbhmayrlgarktdkve.supabase.co" in db_url:
         db_url = db_url.replace("postgresql://postgres:", "postgresql+pg8000://postgres.uoplbhmayrlgarktdkve:", 1)
 elif db_url.startswith("postgresql://"):
     db_url = db_url.replace("postgresql://", "postgresql+pg8000://", 1)
+
+print(f"[DEBUG] final db_url passed to create_engine: {db_url}")
 
 engine = create_engine(db_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
