@@ -17,9 +17,12 @@ extra_origins = os.getenv("BACKEND_CORS_ORIGINS")
 if extra_origins:
     origins.extend([o.strip() for o in extra_origins.split(",")])
 
+print(f"[DEBUG] CORS origins: {origins}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
