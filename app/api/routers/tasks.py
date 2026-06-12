@@ -165,10 +165,10 @@ def reject_task_log(
     if task_log.status != "Pending":
         raise HTTPException(status_code=400, detail=f"Cannot reject task log with status: {task_log.status}")
         
-    # Update status to Failed
-    task_log.status = "Failed"
+    # Delete the task log row completely
+    db.delete(task_log)
     db.commit()
-    return {"task_log_id": task_log.id, "status": "Failed"}
+    return {"task_log_id": task_log_id, "status": "Deleted"}
 
 @router.get("/status/{task_log_id}")
 def get_task_status(
