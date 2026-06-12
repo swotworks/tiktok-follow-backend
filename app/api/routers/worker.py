@@ -61,3 +61,35 @@ def delete_worker(
     db.commit()
     return {"message": "TikTok account successfully deleted"}
 
+
+from pydantic import BaseModel
+
+class WorkerDeleteBatchRequest(BaseModel):
+    worker_ids: List[str] = []
+    delete_all: bool = False
+
+@router.post("/delete-batch")
+def delete_workers_batch(
+    payload: WorkerDeleteBatchRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(dependencies.get_current_user),
+):
+    if payload.delete_all:
+        workers = db.query(models.WorkerAccount).filter(
+            models.WorkerAccount.user_id == current_user.id
+        ).all()
+    else:
+        if not payload.worker_ids:
+            raise HTTPException(status_code=400, detail="No workers specified for deletion.")
+        workers = db.query(models.WorkerAccount).filter(
+            models.WorkerAccount.id.in_(payload.worker_ids),
+            models.WorkerAccount.user_id == current_user.id
+        ).all()
+
+    deleted_count = len(workers)
+    for worker in workers:
+        db.delete(worker)
+    db.commit()
+
+    return {"message": f"Successfully deleted {deleted_count} TikTok account(s)."}
+
